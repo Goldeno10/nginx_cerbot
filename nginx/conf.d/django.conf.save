@@ -1,0 +1,44 @@
+server {
+    listen 80;
+    server_name datacube.uxlivinglab.online;
+
+    # Redirect all HTTP requests to HTTPS
+    return 301 https://$host$request_uri;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name datacube.uxlivinglab.online;
+
+    ssl_certificate /etc/letsencrypt/live/datacube.uxlivinglab.online/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/datacube.uxlivinglab.online/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_ecdh_curve secp384r1;
+
+    # Main location block to proxy to Django or serve static files if Django is down
+    location / {
+        proxy_pass http://django:8000;  # Forward traffic to Django app
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # If the Django app is down, serve static fallback files
+        error_page 502 503 504 = /static-fallback;
+    }
+
+    # Static fallback in case Django is down
+    location /static-fallback {
+        root /usr/share/nginx/html;  # Serve files from this directory
+        index index.html;
+        try_files /index.html =502;  # If index.html doesn't exist, show 502 Bad Gateway
+    }
+}
+
